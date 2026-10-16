@@ -1,0 +1,16 @@
+[Unit]
+Description=Личный новостной агент (Telegram)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=newsbot
+WorkingDirectory=/opt/newsbot
+ExecStart=/opt/newsbot/.venv/bin/python main.py serve
+Restart=always
+RestartSec=10
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

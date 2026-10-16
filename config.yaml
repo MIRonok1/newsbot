@@ -1,0 +1,167 @@
+# Настройки новостного бота. Секреты (ключи, токены, пароли) — только в .env.
+# После изменения файла перезапустите бота (на Netrun — «Перезапустить»).
+
+# --- О читателе: этот текст подставляется во все промпты ---------------------
+profile: |
+  Дмитрий, студент (менеджмент, РАНХиГС). Глубоко интересуется рынком капитала РФ,
+  денежно-кредитной политикой ЦБ, ЦФА и токенизацией (пишет научные статьи о ЦФА),
+  финтехом и AI-продуктами в банках. Нужна не лента заголовков, а понимание: что
+  произошло, почему это важно и что из этого следует. Свободно читает по-английски.
+
+timezone: Europe/Moscow
+
+# --- Расписание (время московское) -------------------------------------------
+schedule:
+  morning: "08:00"
+  evening: "20:00"
+  # Проверка срочного: часы и минуты (сдвиг, чтобы не совпадать со сводками)
+  alerts_hours: "7-23"
+  alerts_minutes: "15,45"
+
+# --- Модели Claude -------------------------------------------------------------
+# Чтобы сэкономить (~$1/мес вместо ~$10), поставьте digest и chat: claude-haiku-5-5.
+models:
+  digest: claude-sonnet-5-5
+  chat: claude-sonnet-5-5
+  alerts: claude-haiku-5-5
+  # Глубина «размышлений»: low | medium | high. Выше — качественнее и дороже.
+  digest_effort: medium
+  chat_effort: low
+  alerts_effort: low
+  # Если модель откажется отвечать, API сам повторит запрос на другой модели
+  # (работает для Sonnet/Opus; для Haiku игнорируется).
+  refusal_fallback: true
+
+# --- Веб-поиск Claude ----------------------------------------------------------
+web_search:
+  enabled: true
+  # Версия инструмента. Если API вернёт 400, бот повторит с fallback_version,
+  # затем без поиска.
+  tool_version: web_search_20260318
+  fallback_version: web_search_20250305
+  digest_max_uses: 4
+  chat_max_uses: 3
+
+# --- Цены для учёта расходов ($ за 1M токенов) --------------------------------
+pricing:
+  claude-sonnet-5-5: {input: 2.00, output: 10.00}
+  claude-haiku-5-5: {input: 0.10, output: 0.50}
+  web_search_per_1000: 10.00
+
+# --- Бюджет ----------------------------------------------------------------------
+budget:
+  monthly_usd: 10
+  # Доля бюджета, после которой поиск отключается
+  disable_search_at: 0.8
+  # Доля бюджета, после которой Claude не вызывается (запасные сводки без модели)
+  stop_claude_at: 1.0
+
+# --- Сводка ----------------------------------------------------------------------
+digest:
+  # Рубрики в порядке показа. key совпадает с topic у лент.
+  rubrics:
+    - {key: russia, title: "🇷🇺 Россия, ЦБ и рынок"}
+    - {key: cfa, title: "🪙 ЦФА и токенизация"}
+    - {key: ai, title: "🤖 AI и финтех"}
+    - {key: world, title: "🌍 Мир и геополитика"}
+  items_min: 12
+  items_max: 20
+  morning_chars: "2500–4000"
+  evening_chars: "до 4500"
+  # Окно новостей: с прошлой плановой сводки, но в этих пределах (часы)
+  window_min_hours: 6
+  window_max_hours: 24
+  # Сколько записей максимум брать из одной ленты (если у ленты не задано своё)
+  max_items_per_feed: 25
+  description_chars: 280
+  # Писать в конце сводки, какие ленты не загрузились
+  show_failed_feeds: true
+
+# --- Срочные уведомления ----------------------------------------------------------
+alerts:
+  max_per_day: 6
+  # Первая проверка после запуска смотрит не дальше чем на столько часов назад
+  first_check_lookback_hours: 1
+  # Котировки старше этого (часы) не алертим — чтобы в выходные не ловить пятницу
+  stale_market_hours: 6
+  # Проверять ли почту на срочное
+  include_mail: true
+
+# --- Котировки ---------------------------------------------------------------------
+# source: moex_index | moex_currency | cbr | yahoo
+# alert_pct — порог срочного алерта (% изменения за день)
+markets:
+  - {key: IMOEX, name: "Индекс Мосбиржи", source: moex_index, secid: IMOEX, alert_pct: 2.5}
+  - {key: RGBI, name: "Индекс гособлигаций RGBI", source: moex_index, secid: RGBI, alert_pct: 1.0}
+  - {key: CNYRUB, name: "Юань (CNY/RUB)", source: moex_currency, secid: CNYRUB_TOM, alert_pct: 2.0}
+  - {key: USD, name: "Доллар (ЦБ)", source: cbr, code: USD}
+  - {key: EUR, name: "Евро (ЦБ)", source: cbr, code: EUR}
+  - {key: SPX, name: "S&P 500", source: yahoo, symbol: "^GSPC", alert_pct: 2.5}
+  - {key: BRENT, name: "Brent", source: yahoo, symbol: "BZ=F", alert_pct: 4.0}
+  - {key: BTC, name: "Bitcoin", source: yahoo, symbol: "BTC-USD", alert_pct: 7.0}
+
+# --- Почта (IMAP, только чтение) ----------------------------------------------------
+mail:
+  # Писем за раз не больше
+  max_messages: 30
+  # Письма больше этого размера не скачиваются целиком (только заголовки)
+  max_size_kb: 300
+  snippet_chars: 400
+  # false — в Claude уходят только отправитель и тема, без текста письма
+  send_body_to_claude: true
+  mailbox: INBOX
+
+# --- Telegram -------------------------------------------------------------------------
+telegram:
+  poll_timeout: 50
+  http_timeout: 20
+
+# --- Вопросы в чате ---------------------------------------------------------------------
+chat:
+  # Сколько прошлых обменов репликами помнить
+  history_exchanges: 3
+
+# --- Сеть -------------------------------------------------------------------------------
+http:
+  timeout: 15
+  workers: 8
+
+# --- RSS-ленты --------------------------------------------------------------------------
+# Поля: name, url (или google_news: "запрос" + lang: ru|en), topic (= key рубрики).
+# Необязательные: max_items, priority: high, window_hours (расширяет окно новостей).
+feeds:
+  - {name: Axios, url: "https://api.axios.com/feed/top/", topic: world}
+  - {name: BBC World, url: "https://feeds.bbci.co.uk/news/world/rss.xml", topic: world}
+  - {name: BBC Business, url: "https://feeds.bbci.co.uk/news/business/rss.xml", topic: world}
+  - {name: "Банк России, пресс-релизы", url: "https://www.cbr.ru/rss/RssPress", topic: russia, priority: high}
+  - {name: "Банк России, новости", url: "https://www.cbr.ru/rss/eventrss", topic: russia}
+  - {name: Интерфакс, url: "https://www.interfax.ru/rss.asp", topic: russia}
+  - {name: РБК, url: "https://rssexport.rbc.ru/rbcnews/news/30/full.rss", topic: russia}
+  - {name: Коммерсантъ, url: "https://www.kommersant.ru/RSS/news.xml", topic: russia}
+  - {name: Ведомости, url: "https://www.vedomosti.ru/rss/news", topic: russia}
+  # Если лента не открывается с сервера (`python main.py check` покажет ❌),
+  # замените её на Google News по домену, например:
+  # - {name: Ведомости, google_news: "site:vedomosti.ru when:1d", lang: ru, topic: russia}
+
+  - name: ЦФА
+    google_news: 'ЦФА OR "цифровые финансовые активы" OR токенизация when:2d'
+    lang: ru
+    topic: cfa
+    window_hours: 48
+  - name: Tokenization
+    google_news: 'tokenization OR "tokenized assets" OR "real-world assets" when:2d'
+    lang: en
+    topic: cfa
+    window_hours: 48
+  - name: ИИ в финансах
+    google_news: '(ИИ OR "искусственный интеллект" OR нейросеть) (банк OR финтех OR платежи) when:1d'
+    lang: ru
+    topic: ai
+  - name: AI fintech
+    google_news: '(AI OR "artificial intelligence") (fintech OR bank OR payments) when:1d'
+    lang: en
+    topic: ai
+  - name: AI labs
+    google_news: 'OpenAI OR Anthropic OR "Google DeepMind" OR Nvidia when:1d'
+    lang: en
+    topic: ai
