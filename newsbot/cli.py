@@ -20,7 +20,7 @@ def build_ctx(config: str, dry_run: bool = False, log_to_file: bool = True) -> C
     cfg = load_config(config)
     s = cfg.secrets
     setup_logging(cfg.data_dir, [s.telegram_bot_token, s.anthropic_api_key, s.gemini_api_key, s.imap_password, s.ics_url],
-                  to_file=log_to_file and not dry_run)
+                  to_file=log_to_file and not dry_run, tz=cfg.tz)
     http = make_http(cfg.get("http.timeout", 15))
     state = State.load(cfg.data_dir / "state.json", readonly=dry_run)
     tg = Telegram(http, s.telegram_bot_token, s.telegram_chat_id, cfg.get("telegram.http_timeout", 20)) \

@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 import logging.handlers
 import sys
+from datetime import datetime, tzinfo
 from pathlib import Path
 
 
@@ -27,12 +28,14 @@ class RedactFilter(logging.Filter):
 
 
 def setup_logging(data_dir: Path, secrets: list[str] | None = None, level: int = logging.INFO,
-                  to_file: bool = True) -> None:
+                  to_file: bool = True, tz: tzinfo | None = None) -> None:
     root = logging.getLogger()
     root.setLevel(level)
     for h in list(root.handlers):
         root.removeHandler(h)
     fmt = logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
+    if tz is not None:  # время в логах — по часовому поясу из config.yaml, а не сервера (UTC)
+        fmt.converter = lambda ts: datetime.fromtimestamp(ts, tz).timetuple()
     redact = RedactFilter(secrets or [])
 
     stream = logging.StreamHandler(sys.stderr)
