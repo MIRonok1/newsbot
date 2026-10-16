@@ -140,16 +140,19 @@ class Bot:
         now = ctx.now().astimezone(cfg.tz)
         digest = ctx.state["last_digest_text"]
         digest_plain = truncate(html_to_text(digest, keep_lines=True), 8000) if digest else "(сводок ещё не было)"
-        uses = int(cfg.get("web_search.chat_max_uses", 3))
+        model = cfg.get("models.chat", "claude-sonnet-5-5")
+        uses = int(cfg.get("web_search.chat_max_uses", 3)) if llm.supports_search(model) else 0
         system = CHAT_SYSTEM.format(profile=cfg.profile, search_limit=uses,
                                     now=f"{ru_date(now)} {now:%H:%M} МСК", digest=digest_plain)
+        if not uses:
+            system += "\n\nВеб-поиска сейчас нет: отвечай по сводке и своим знаниям, а если данных не хватает — так и скажи."
         history = ctx.state["chat_history"][-int(cfg.get("chat.history_exchanges", 3)):]
         messages = []
         for h in history:
             messages += [{"role": "user", "content": h["q"]}, {"role": "assistant", "content": h["a"]}]
         messages.append({"role": "user", "content": question})
         try:
-            res = llm.ask(ctx, purpose="chat", model=cfg.get("models.chat", "claude-sonnet-5-5"),
+            res = llm.ask(ctx, purpose="chat", model=model,
                           system=system, messages=messages, max_tokens=8000,
                           effort=cfg.get("models.chat_effort", "low"), search_uses=uses)
             reply = sanitize_html(res.text.strip()) or "Не получилось сформулировать ответ."
@@ -190,7 +193,7 @@ class Bot:
         m = month_usage(cfg.data_dir / "usage.jsonl", now)
         budget = float(cfg.get("budget.monthly_usd", 0) or 0)
         mode = {"ok": "", "no_search": " — поиск отключён (порог бюджета)",
-                "stopped": " — Claude отключён до конца месяца"}[budget_mode(cfg, now)]
+                "stopped": " — нейросеть отключена до конца месяца"}[budget_mode(cfg, now)]
         lines += ["", f"Расход API за {now.astimezone(tz):%m.%Y}: <b>${m.usd:.2f}</b>"
                       + (f" из ${budget:g}" if budget else "") + mode,
                   f"Вызовов: {m.calls}, поисков: {m.searches}, токенов: "

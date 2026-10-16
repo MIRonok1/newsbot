@@ -18,13 +18,16 @@ schedule:
   alerts_hours: "7-23"
   alerts_minutes: "15,45"
 
-# --- Модели Claude -------------------------------------------------------------
-# Чтобы сэкономить (~$1/мес вместо ~$10), поставьте digest и chat: claude-haiku-5-5.
+# --- Модели ------------------------------------------------------------------
+# Сейчас стоит бесплатная Google Gemini (ключ GEMINI_API_KEY из aistudio.google.com).
+# У бесплатной Gemini нет веб-поиска: сводки строятся только по лентам.
+# Чтобы вернуть Claude (платно, ключ ANTHROPIC_API_KEY): digest и chat — claude-sonnet-5-5
+# (~$10/мес) или claude-haiku-5-5 (~$1/мес), alerts — claude-haiku-5-5.
 models:
-  digest: claude-sonnet-5-5
-  chat: claude-sonnet-5-5
-  alerts: claude-haiku-5-5
-  # Глубина «размышлений»: low | medium | high. Выше — качественнее и дороже.
+  digest: gemini-3.8-flash
+  chat: gemini-3.8-flash
+  alerts: gemini-3.5-flash-lite
+  # Глубина «размышлений»: low | medium | high. Выше — качественнее и дороже (и медленнее).
   digest_effort: medium
   chat_effort: low
   alerts_effort: low
@@ -32,7 +35,7 @@ models:
   # (работает для Sonnet/Opus; для Haiku игнорируется).
   refusal_fallback: true
 
-# --- Веб-поиск Claude ----------------------------------------------------------
+# --- Веб-поиск (только для моделей Claude) --------------------------------------
 web_search:
   enabled: true
   # Версия инструмента. Если API вернёт 400, бот повторит с fallback_version,
@@ -47,6 +50,7 @@ pricing:
   claude-sonnet-5-5: {input: 2.00, output: 10.00}
   claude-haiku-5-5: {input: 0.10, output: 0.50}
   web_search_per_1000: 10.00
+  # Модели gemini-* на бесплатном тарифе не стоят ничего (цен нет — расход $0)
 
 # --- Бюджет ----------------------------------------------------------------------
 budget:
@@ -107,7 +111,8 @@ mail:
   # Письма больше этого размера не скачиваются целиком (только заголовки)
   max_size_kb: 300
   snippet_chars: 400
-  # false — в Claude уходят только отправитель и тема, без текста письма
+  # false — в нейросеть уходят только отправитель и тема, без текста письма.
+  # Бесплатная Gemini может использовать присланные тексты для обучения Google.
   send_body_to_claude: true
   mailbox: INBOX
 

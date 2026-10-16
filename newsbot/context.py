@@ -1,4 +1,4 @@
-"""Общий контекст: конфиг, состояние, HTTP- и Claude-клиенты, часы."""
+"""Общий контекст: конфиг, состояние, HTTP-, Claude- и Gemini-клиенты, часы."""
 from __future__ import annotations
 
 import threading
@@ -44,6 +44,7 @@ class Ctx:
     state: State
     http: httpx.Client
     llm: Any = None
+    gemini: Any = None
     telegram: Any = None
     now: Callable[[], datetime] = utcnow
     dry_run: bool = False

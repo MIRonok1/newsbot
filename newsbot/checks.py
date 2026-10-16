@@ -1,4 +1,4 @@
-"""Проверка источников: ленты, котировки, почта, календарь, Claude API, Telegram."""
+"""Проверка источников: ленты, котировки, почта, календарь, нейросеть (Claude/Gemini), Telegram."""
 from __future__ import annotations
 
 import html
@@ -6,6 +6,7 @@ from datetime import timedelta
 
 from .feeds import collect_news
 from .ical import fetch_events
+from .llm import is_gemini
 from .mail import fetch_mail
 from .markets import fetch_quotes
 
@@ -46,16 +47,9 @@ def run_checks(ctx, claude: bool = True, telegram: bool = True) -> list[tuple[st
         rows.append(("Календарь (iCal)", True, "не настроен — пропускаю"))
 
     if claude:
-        if ctx.llm is None:
-            rows.append(("Claude API", False, "ANTHROPIC_API_KEY не задан"))
-        else:
-            for key in ("models.digest", "models.alerts"):
-                model = cfg.get(key)
-                try:
-                    ctx.llm.models.retrieve(model)  # бесплатно: проверяет ключ, страну и имя модели
-                    rows.append((f"Claude API: {model}", True, "доступна"))
-                except Exception as e:
-                    rows.append((f"Claude API: {model}", False, _api_error(e)))
+        models = list(dict.fromkeys(cfg.get(k) for k in ("models.digest", "models.chat", "models.alerts")))
+        for model in [m for m in models if m]:
+            rows.append(_check_gemini(ctx, model) if is_gemini(model) else _check_claude(ctx, model))
 
     if telegram:
         if ctx.telegram is None or not cfg.secrets.telegram_bot_token:
@@ -68,6 +62,34 @@ def run_checks(ctx, claude: bool = True, telegram: bool = True) -> list[tuple[st
             except Exception as e:
                 rows.append(("Telegram", False, str(e)))
     return rows
+
+
+def _check_claude(ctx, model: str) -> tuple[str, bool, str]:
+    if ctx.llm is None:
+        return ("Claude API", False, "ANTHROPIC_API_KEY не задан")
+    try:
+        ctx.llm.models.retrieve(model)  # бесплатно: проверяет ключ, страну и имя модели
+        return (f"Claude API: {model}", True, "доступна")
+    except Exception as e:
+        return (f"Claude API: {model}", False, _api_error(e))
+
+
+def _check_gemini(ctx, model: str) -> tuple[str, bool, str]:
+    if getattr(ctx, "gemini", None) is None:
+        return ("Gemini API", False, "GEMINI_API_KEY не задан")
+    try:
+        ctx.gemini.get_model(model)  # бесплатно: проверяет ключ, страну и имя модели
+        return (f"Gemini API: {model}", True, "доступна")
+    except Exception as e:
+        status = getattr(e, "status_code", None)
+        msg = getattr(e, "message", None) or str(e)
+        if status == 400 and "key" in msg.lower() or status == 401:
+            return (f"Gemini API: {model}", False, "неверный GEMINI_API_KEY")
+        if status == 403:
+            return (f"Gemini API: {model}", False, f"403 — нет доступа или регион не поддерживается ({msg[:150]})")
+        if status == 404:
+            return (f"Gemini API: {model}", False, "404 — модель не найдена, проверьте имя в config.yaml")
+        return (f"Gemini API: {model}", False, f"{status or type(e).__name__}: {msg[:200]}")
 
 
 def _api_error(e: Exception) -> str:

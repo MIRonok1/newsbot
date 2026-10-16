@@ -1,4 +1,4 @@
-"""Сводка: сбор данных → вход модели → Claude → санитайзер → Telegram. Запасная сводка при сбое."""
+"""Сводка: сбор данных → вход модели → нейросеть → санитайзер → Telegram. Запасная сводка при сбое."""
 from __future__ import annotations
 
 import html
@@ -158,7 +158,7 @@ def fallback_digest(ctx, data: DigestData, error: str) -> str:
     local = data.now.astimezone(tz)
     title = "☀️ Утренняя сводка" if data.kind == "morning" else "🌙 Вечерняя сводка"
     out = [f"<b>{title} · {ru_date(local)}</b>",
-           f"<i>Запасной вариант: Claude недоступен — {html.escape(error[:300])}</i>", "",
+           f"<i>Запасной вариант: нейросеть недоступна — {html.escape(error[:300])}</i>", "",
            "<b>📈 Рынки</b>"]
     out += [f"• {html.escape(q.line(tz))}" for q in data.quotes]
     for r in ctx.cfg.rubrics:
@@ -182,7 +182,7 @@ def generate(ctx, data: DigestData) -> DigestResult:
     cfg = ctx.cfg
     model = cfg.get("models.digest", "claude-sonnet-5-5")
     uses = int(cfg.get("web_search.digest_max_uses", 4))
-    search_on = bool(cfg.get("web_search.enabled", True)) and uses > 0 and \
+    search_on = llm.supports_search(model) and bool(cfg.get("web_search.enabled", True)) and uses > 0 and \
         budget_mode(cfg, ctx.now()) == "ok"
     system = digest_system(cfg, data.kind, data.now.astimezone(cfg.tz), uses, search_on)
     try:
@@ -203,7 +203,7 @@ def generate(ctx, data: DigestData) -> DigestResult:
             log.info("digest: %s", note)
         return DigestResult(text, data.kind, False, usd=res.usd)
     except Exception as e:
-        log.exception("сводка: Claude не сработал")
+        log.exception("сводка: нейросеть не сработала")
         msg = str(e) or type(e).__name__
         return DigestResult(fallback_digest(ctx, data, msg), data.kind, True, error=msg)
 

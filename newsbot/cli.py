@@ -8,6 +8,7 @@ from pathlib import Path
 
 from .config import ConfigError, load_config
 from .context import Ctx, make_anthropic, make_http
+from .gemini import make_gemini
 from .logs import setup_logging
 from .state import State
 from .telegram import Telegram, TelegramError
@@ -18,13 +19,14 @@ log = logging.getLogger("newsbot")
 def build_ctx(config: str, dry_run: bool = False, log_to_file: bool = True) -> Ctx:
     cfg = load_config(config)
     s = cfg.secrets
-    setup_logging(cfg.data_dir, [s.telegram_bot_token, s.anthropic_api_key, s.imap_password, s.ics_url],
+    setup_logging(cfg.data_dir, [s.telegram_bot_token, s.anthropic_api_key, s.gemini_api_key, s.imap_password, s.ics_url],
                   to_file=log_to_file and not dry_run)
     http = make_http(cfg.get("http.timeout", 15))
     state = State.load(cfg.data_dir / "state.json", readonly=dry_run)
     tg = Telegram(http, s.telegram_bot_token, s.telegram_chat_id, cfg.get("telegram.http_timeout", 20)) \
         if s.telegram_bot_token else None
     return Ctx(cfg=cfg, state=state, http=http, llm=make_anthropic(s.anthropic_api_key),
+               gemini=make_gemini(s.gemini_api_key),
                telegram=tg, dry_run=dry_run)
 
 

@@ -1,4 +1,4 @@
-"""Вызовы Claude: веб-поиск с откатом версий, pause_turn, отказы, учёт расходов."""
+"""Вызовы модели: Claude (веб-поиск с откатом версий, pause_turn, отказы) или Gemini; учёт расходов."""
 from __future__ import annotations
 
 import logging
@@ -40,6 +40,15 @@ def _supports_fallback(model: str) -> bool:
     return model.startswith(("claude-sonnet", "claude-opus", "claude-fable"))
 
 
+def is_gemini(model: str) -> bool:
+    return (model or "").startswith("gemini")
+
+
+def supports_search(model: str) -> bool:
+    """Веб-поиск есть только у Claude: у Gemini на бесплатном тарифе поиска нет."""
+    return not is_gemini(model)
+
+
 def _block_type(b) -> str:
     return b.get("type") if isinstance(b, dict) else getattr(b, "type", "")
 
@@ -51,6 +60,8 @@ def _block_text(b) -> str:
 def ask(ctx, *, purpose: str, model: str, system: str, messages: list[dict], max_tokens: int,
         effort: str | None = None, search_uses: int = 0, output_format: dict | None = None) -> LLMResult:
     """Один «ход» модели с продолжениями pause_turn. Тексты всех итераций склеиваются."""
+    if is_gemini(model):
+        return _ask_gemini(ctx, purpose, model, system, messages, max_tokens, effort, output_format)
     if ctx.llm is None:
         raise LLMError("ANTHROPIC_API_KEY не задан")
     cfg = ctx.cfg
@@ -131,6 +142,65 @@ def _run(ctx, purpose, model, system, messages, max_tokens, effort, tools, outpu
     else:
         log.warning("pause_turn повторялся больше %d раз — беру что есть", MAX_CONTINUATIONS)
     return LLMResult(text="".join(texts), stop_reason=stop, usd=total_usd, searches=searches)
+
+
+GEMINI_STOP = {"STOP": "end_turn", "MAX_TOKENS": "max_tokens"}
+
+
+def _gemini_text(content) -> str:
+    if isinstance(content, str):
+        return content
+    return "".join(_block_text(b) for b in content if _block_type(b) == "text")
+
+
+def _ask_gemini(ctx, purpose, model, system, messages, max_tokens, effort, output_format) -> LLMResult:
+    from .gemini import GeminiError
+
+    if getattr(ctx, "gemini", None) is None:
+        raise LLMError("GEMINI_API_KEY не задан")
+    if usage_mod.budget_mode(ctx.cfg, ctx.now()) == "stopped":
+        raise LLMError("месячный бюджет на нейросеть исчерпан")
+    contents = [{"role": "model" if m["role"] == "assistant" else "user",
+                 "parts": [{"text": _gemini_text(m["content"])}]} for m in messages]
+    gen: dict = {"maxOutputTokens": max_tokens}
+    if effort:
+        gen["thinkingConfig"] = {"thinkingLevel": effort}
+    if output_format and output_format.get("schema"):
+        gen["responseMimeType"] = "application/json"
+        gen["responseJsonSchema"] = output_format["schema"]
+    body = {"systemInstruction": {"parts": [{"text": system}]}, "contents": contents, "generationConfig": gen}
+    try:
+        try:
+            resp = ctx.gemini.generate(model, body)
+        except GeminiError as e:
+            if e.status_code != 400 or "thinkingConfig" not in gen:
+                raise
+            log.warning("Gemini 400 с thinkingConfig, повторяю без него: %s", e.message[:200])
+            del gen["thinkingConfig"]
+            resp = ctx.gemini.generate(model, body)
+    except GeminiError as e:
+        if e.status_code == 429:
+            raise LLMError("лимит бесплатного тарифа Gemini исчерпан (429), попробуйте позже") from e
+        if e.status_code == 400:
+            raise LLMError(f"Gemini API отклонил запрос: {e.message}") from e
+        raise LLMError(f"Gemini API: {e}") from e
+
+    meta = resp.get("usageMetadata") or {}
+    used = {"input_tokens": int(meta.get("promptTokenCount", 0) or 0),
+            "output_tokens": int(meta.get("candidatesTokenCount", 0) or 0) + int(meta.get("thoughtsTokenCount", 0) or 0)}
+    usd = usage_mod.record(ctx.cfg.data_dir / "usage.jsonl", ctx.now(), purpose,
+                           resp.get("modelVersion") or model, used, ctx.cfg.section("pricing"))
+    block = (resp.get("promptFeedback") or {}).get("blockReason")
+    cands = resp.get("candidates") or []
+    if block or not cands:
+        raise LLMError(f"модель отказалась отвечать на запрос ({block or 'пустой ответ'})")
+    cand = cands[0]
+    finish = cand.get("finishReason") or "STOP"
+    if finish not in GEMINI_STOP:
+        raise LLMError(f"модель отказалась отвечать на запрос ({finish})")
+    parts = (cand.get("content") or {}).get("parts") or []
+    text = "".join(p.get("text", "") for p in parts if not p.get("thought"))
+    return LLMResult(text=text, stop_reason=GEMINI_STOP[finish], usd=usd)
 
 
 def extract_digest(text: str) -> str | None:

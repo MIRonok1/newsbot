@@ -47,6 +47,7 @@ class Market:
 @dataclass
 class Secrets:
     anthropic_api_key: str = ""
+    gemini_api_key: str = ""
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
     imap_host: str = ""
@@ -157,6 +158,7 @@ def load_config(path: str | Path = "config.yaml", env_file: str | Path | None = 
         raw = yaml.safe_load(fh)
     secrets = Secrets(
         anthropic_api_key=os.getenv("ANTHROPIC_API_KEY", "").strip(),
+        gemini_api_key=os.getenv("GEMINI_API_KEY", "").strip(),
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN", "").strip(),
         telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID", "").strip(),
         imap_host=os.getenv("IMAP_HOST", "").strip(),
